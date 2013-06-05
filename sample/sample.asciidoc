@@ -1,0 +1,19 @@
+= Sample Doc
+//////
+:copyright: 2013, ACME corporation
+:revinfo:
+v1.1, ACME, 2013-05-29: bugfix
+v1.0, ACME, 2013-05-23: Initial version
+:legalnotice:
+.GPL
+//////
+
+Sample document
+
+== Chapter 1
+
+[NOTE]
+sample note
+
+image:images/acme.jpg[width="50%"]
+

@@ -1,0 +1,94 @@
+---
+# asciidoc -> pdf  : a2x -> asciidoc -> xsltproc -> dblatex
+# asciidoc -> html : asciidoc -> html
+
+#############################################
+# Global listing of directories to copy into html/
+# (use html::copy_resources on local yaml files)
+#############################################
+html::copy_resources:
+html::copy_global_resources:
+  - Schemas
+  - Images
+  - schemas
+  - images
+
+#############################################
+# defaults options for asciidoc documents (html)
+#############################################
+asciidoc::html::options:
+  # verbose mode
+  #- "-v"
+  # Auto-number sections
+  - "-n"
+
+#############################################
+# defaults config files for asciidoc documents (html)
+#############################################
+asciidoc::html::config:
+
+#############################################
+# defaults attributes for asciidoc documents (html)
+#############################################
+asciidoc::html::attributes:
+  # Table of Content
+  - toc
+
+#############################################
+# defaults options for asciidoc documents (pdf)
+#############################################
+asciidoc::pdf::options:
+  # verbose mode
+  #- "-v"
+
+#############################################
+# defaults config files for asciidoc documents (pdf)
+#############################################
+asciidoc::pdf::config:
+  # page break before section 1
+  - section1-pagebreak.conf
+
+#############################################
+# defaults attributes for asciidoc documents (pdf)
+#############################################
+asciidoc::pdf::attributes:
+  # prise en compte fichier *-docinfo.xml
+  - docinfo
+  # prise en compte fichier *-revhistory.xml
+  - revisionhistory
+  # Accents possibles dans les titres
+  - ascii-ids
+
+#############################################
+# defaults options for a2x
+#############################################
+a2x::options:
+  # keep temporary xml file
+  #- "-k"
+
+#############################################
+# defaults options for dblatex backend
+#############################################
+dblatex::options:
+  # verbose mode
+  #- "-V"
+
+#############################################
+# defaults parameters for dblatex backend
+#############################################
+dblatex::params:
+  # table des matieres
+  - doc.toc.show=1
+  # pas de liens visibles
+  - latex.hyperparam="hidelinks=true,pdfstartview=FitH"
+  # pas de logo dblatex
+  - doc.publisher.show=0
+
+
+#############################################
+# defaults xsl for dblatex backend
+#############################################
+dblatex::xsl:
+  # roles fonts
+  - roles-fonts.xsl
+

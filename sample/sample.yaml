@@ -1,0 +1,4 @@
+---
+dblatex::params:
+  - doc.toc.show=0
+
