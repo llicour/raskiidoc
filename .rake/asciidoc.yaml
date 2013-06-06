@@ -92,3 +92,42 @@ dblatex::xsl:
   # roles fonts
   - roles-fonts.xsl
 
+
+
+####################################################
+# Processing options
+#  %f : full input filename (/path1/path2/file.txt)
+#  %F : input base filename (file.txt)
+#  %D : input dirname (/path1/path2)
+#  %E : input extension (.txt)
+#  %r : input filename without extension (file)
+#  %o : full output filename (/path1/path2/pdf/file.pdf)
+#  %o : output dirname (/path1/path2/pdf)
+####################################################
+
+#############################################
+# Preprocessing tools before pdf generation
+#############################################
+tools::pdf::pre:
+  # Generate docbook metadata file : *-docinfo.xml
+  - python .rake/tools/asciidoc-tools/docinfo_generator.py %f
+
+#############################################
+# Postprocessing tools after pdf generation
+#############################################
+tools::pdf::post:
+  # remove docinfo files
+  - rm -f %D/%r-docinfo.xml
+
+#############################################
+# Preprocessing tools before html generation
+#############################################
+tools::html::pre:
+
+#############################################
+# Postprocessing tools after html generation
+#############################################
+tools::html::post:
+  # Remove footer
+  - sed -i '/^Last updated/d' %o
+

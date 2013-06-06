@@ -15,6 +15,8 @@ $sections = [ "asciidoc::pdf::attributes", "asciidoc::pdf::options", "asciidoc::
               "a2x::options",
               "dblatex::options", "dblatex::params", "dblatex::xsl",
               "html::copy_global_resources", "html::copy_resources",
+              "tools::html::pre", "tools::html::post",
+              "tools::pdf::pre", "tools::pdf::post",
 ]
 
 # Sections dont parametres doivent etre uniques
@@ -261,17 +263,44 @@ task :genpdf, [:filelist] do |t, args|
               }
               opts += "-v " if $debug
 
-              # Generate docbook metadata file : *-docinfo.xml
-              cmd = "python .rake/tools/asciidoc-tools/docinfo_generator.py #{filename}"
-              puts "Executing : #{cmd}" if $verbose
-              res = %x[#{cmd}]
-              puts res if res != ""
+              # Execute pre actions
+              conf["tools::pdf::pre"].each {|t|
+                t = t.gsub(/%f/, filename)
+                t = t.gsub(/%F/, file)
+                t = t.gsub(/%D/, dir)
+                t = t.gsub(/%E/, extname)
+                t = t.gsub(/%r/, file.gsub(extname, ""))
+                t = t.gsub(/%o/, outfile)
+                t = t.gsub(/%O/, outdir)
+
+                cmd = "#{t}"
+                puts "Executing : #{cmd}" if $verbose
+                res = %x[#{cmd}]
+                puts res if res != ""
+              }
 
               cmd = "a2x -D #{outdir} #{opts} #{filename}"
               puts "Generating #{outfile}\n"
               puts "Executing : #{cmd}" if $verbose
               res = %x[#{cmd}]
               puts res if res != ""
+
+              # Execute post actions
+              conf["tools::pdf::post"].each {|t|
+                t = t.gsub(/%f/, filename)
+                t = t.gsub(/%F/, file)
+                t = t.gsub(/%D/, dir)
+                t = t.gsub(/%E/, extname)
+                t = t.gsub(/%r/, file.gsub(extname, ""))
+                t = t.gsub(/%o/, outfile)
+                t = t.gsub(/%O/, outdir)
+
+                cmd = "#{t}"
+                puts "Executing : #{cmd}" if $verbose
+                res = %x[#{cmd}]
+                puts res if res != ""
+              }
+
             end
         } unless Thread.list.length > 32
     end
@@ -331,12 +360,44 @@ task :genhtml, [:filelist, :theme, :backend] do |t, args|
 
               asciidocopts += "-v " if $debug
 
+              # Execute pre actions
+              conf["tools::html::pre"].each {|t|
+                t = t.gsub(/%f/, filename)
+                t = t.gsub(/%F/, file)
+                t = t.gsub(/%D/, dir)
+                t = t.gsub(/%E/, extname)
+                t = t.gsub(/%r/, file.gsub(extname, ""))
+                t = t.gsub(/%o/, outfile)
+                t = t.gsub(/%O/, outdir)
+
+                cmd = "#{t}"
+                puts "Executing : #{cmd}" if $verbose
+                res = %x[#{cmd}]
+                puts res if res != ""
+              }
+
               cmd = "asciidoc -o #{outfile} #{asciidocopts} --backend=#{args.backend} --theme=#{args.theme} #{filename}"
               puts "Generating #{outfile}\n"
               puts "Executing : #{cmd}" if $verbose
               res = %x[#{cmd}]
               puts res if res != ""
-              #`sed -i '/^Last updated/d' #{fileout}`
+
+              # Execute post actions
+              conf["tools::html::post"].each {|t|
+                t = t.gsub(/%f/, filename)
+                t = t.gsub(/%F/, file)
+                t = t.gsub(/%D/, dir)
+                t = t.gsub(/%E/, extname)
+                t = t.gsub(/%r/, file.gsub(extname, ""))
+                t = t.gsub(/%o/, outfile)
+                t = t.gsub(/%O/, outdir)
+
+                cmd = "#{t}"
+                puts "Executing : #{cmd}" if $verbose
+                res = %x[#{cmd}]
+                puts res if res != ""
+              }
+
             end
         } unless Thread.list.length > 32
     end

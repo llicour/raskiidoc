@@ -10,10 +10,22 @@ v1.0, ACME, 2013-05-23: Initial version
 
 Sample document
 
-== Chapter 1
+== Text
 
 [NOTE]
-sample note
+automatic section 1 pagebreak
+
+== Fonts
+
+=== Normal
+
+Normal text
+
+=== Extended with roles
+
+Text [f-]#little# [f--]#tiny# [f1]#large# [f2]#hudge#
+
+== Images
 
 image:images/acme.jpg[width="50%"]
 
