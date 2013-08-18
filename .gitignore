@@ -2,4 +2,3 @@
 html/
 pdf/
 *-docinfo.xml
-.rake/tools/asciidoc-tools
