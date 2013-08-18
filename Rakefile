@@ -6,34 +6,46 @@ require 'erb'
 
 $DEBUG=1
 
-$pdf_folder      = "pdf"  # Where you generate your pdf files
-$html_folder     = "html" # Where you generate your html files
+$options = { "pdf"    => {:path => "pdf",    :ext => "pdf",  :prog => "a2x"},
+             "html"   => {:path => "html",   :ext => "html", :prog => "asciidoc" },
+             "slidy2" => {:path => "slides", :ext => "html", :prog => "asciidoc" },
+             "slidy"  => {:path => "slides", :ext => "html", :prog => "asciidoc" },
+}
+
 
 # sections possibles du fichier de configuration
-$sections = [ "asciidoc::pdf::attributes", "asciidoc::pdf::options", "asciidoc::pdf::config",
-              "asciidoc::html::attributes", "asciidoc::html::options", "asciidoc::html::config",
+$sections = [
               "a2x::options",
-              "dblatex::options", "dblatex::params", "dblatex::xsl",
+              "dblatex::options", "dblatex::params", "dblatex::xsl", "dblatex::sty",
               "html::copy_global_resources", "html::copy_resources",
-              "tools::html::pre", "tools::html::post",
-              "tools::pdf::pre", "tools::pdf::post",
 ]
+$options.keys.each {|t|
+  $sections << "asciidoc::#{t}::attributes"
+  $sections << "asciidoc::#{t}::options"
+  $sections << "asciidoc::#{t}::config"
+  $sections << "tools::#{t}::pre"
+  $sections << "tools::#{t}::post"
+}
 
 # Sections dont parametres doivent etre uniques
 $sections_uniq = [ "dblatex::params" ]
+
+$globalConfFile = "asciidoc.yaml"
+
 
 ################################################################################
 desc "help task"
 ################################################################################
 task :help do
-  puts "Usage : [FORCE] [DEBUG] [MODE] [FILE] rake"
+  puts "Usage : [FORCE] [DEBUG] [FILE] rake [target]"
   puts
   puts "  FORCE=1         : force regeneration"
   puts "  DEBUG=1         : verbose mode"
   puts "  DEBUG=2         : debug mode"
-  puts "  MODE=pdf        : pdf only"
-  puts "  MODE=html       : html only"
+  puts "  DEBUG=3         : debug+ mode"
+  puts "  DEBUG=4         : debug++ mode"
   puts "  FILE=<filename> : filename only"
+  puts "  target          : pdf, html, slidy, slidy2"
   puts
 end
 
@@ -45,20 +57,22 @@ task :default do
     $confdir = nil if ! File.directory?($confdir)
     $verbose = (ENV["DEBUG"].nil?)?false:true
     $debug   = (ENV["DEBUG"].nil?)?false:(ENV["DEBUG"].to_i > 1)?true:false
+    $debug2  = (ENV["DEBUG"].nil?)?false:(ENV["DEBUG"].to_i > 2)?true:false
+    $debug3  = (ENV["DEBUG"].nil?)?false:(ENV["DEBUG"].to_i > 3)?true:false
     $force   = (ENV["FORCE"].nil?)?false:true
-    $mode    = (ENV["MODE"].nil?)?"all":ENV["MODE"]
     $curdir  = ENV["PWD"]
 
     # Load config file
     begin
-      $conf = YAML.load_file("#{$confdir}/asciidoc.yaml")
+      $conf = YAML.load_file("#{$confdir}/#{$globalConfFile}")
     rescue
-      puts "Unable to locate #{$confdir}/asciidoc.yaml"
+      puts "Unable to locate #{$confdir}/#{$globalConfFile}"
       $conf = {}
     end
     $sections.each {|o|
       $conf[o] = [] if $conf[o].nil?
     }
+    $conf[:globalConfFile] = "#{$confdir}/#{$globalConfFile}"
 
     filelist = []
     if ENV["FILE"].nil?
@@ -74,29 +88,388 @@ task :default do
       }
     else
       filelist.push $curdir + "/" + ENV["FILE"]
+      $force = true
     end
 
-    if $mode == "all" or $mode == "pdf"
-      Rake::Task[:genpdf].invoke(Array.new(filelist))
-    end
-    if $mode == "all" or $mode == "html"
-      Rake::Task[:genhtml].invoke(Array.new(filelist))
-    end
+    Rake::Task[:gen].invoke(Array.new(filelist))
 end
 
+task :pdf do
+    $filter = :pdf
+    Rake::Task[:default].execute()
+end
+task :html do
+    $filter = :html
+    Rake::Task[:default].execute()
+end
+task :slidy do
+    $filter = :slidy
+    Rake::Task[:default].execute()
+end
+task :slidy2 do
+    $filter = :slidy2
+    Rake::Task[:default].execute()
+end
 
 ################################################################################
-# Read optional file parameters
+# Doc Class
 ################################################################################
-def ReadConfig(filename)
+class Doc
+
+  attr_reader :filename, :extname, :dir, :file
+
+  def initialize(filename)
+    @filename = filename
+    @extname = File.extname(@filename)
+    @dir = File.dirname(@filename)
+    @file = File.basename(@filename)
+    @convert_attr = nil
+
+    begin
+      @content = IO.readlines(@filename)
+    rescue => err
+      puts "Exception: #{err}"
+      return
+    end
+
+    if @content.grep(/^:noconvert:/).count != 0
+      puts "Skip processing #{@filename} (noconvert tag)\n" if $verbose
+      return
+    end
+
+    @convert_attr = @content.grep(/^:convert: /)
+    if @convert_attr.count == 0
+      puts "Skip processing #{@filename} (no convert tag)\n" if $verbose
+    end
+  end
+
+  def getConvertList
+    return @convert_attr
+  end
+
+end
+
+################################################################################
+# ConvertDoc Class
+################################################################################
+class ConvertDoc
+
+  attr_reader :outdir, :outfile
+  attr_reader :Type, :ConfFile, :Opts, :FullOpts
+  attr_accessor :conf
+
+  def initialize(doc, convert)
+    @doc = doc
+
+    m = /^:convert: (?<type>pdf|html|slidy|slidy2)(?<convopts>,.*)*$/.match(convert)
+    if not m.nil?
+      @Type = m[:type]
+      convopts = m[:convopts]
+    else
+      puts "Skip converting #{@doc.file} (invalid convert attribute : #{convert})"
+      return
+    end
+    return if not $filter.nil? and @Type != $filter.to_s
+
+    if not m[:convopts].nil?
+      m[:convopts].split(/,/).each do |o|
+        /^outfile=([\w\-\%\.\/]+)$/.match(o) {|a|
+          @outfile = a[1]
+        }
+        /^conffile=([\w\-\%\.\/]+)$/.match(o) {|a|
+          @ConfFile = a[1]
+        }
+        /^opts=([\w\-\%\."' =]+)$/.match(o) {|a|
+          @Opts = a[1]
+        }
+        /^fullopts=([\w\-\%\."' =]+)$/.match(o) {|a|
+          @FullOpts = a[1]
+        }
+      end
+    end
+    
+    if @outfile.nil?
+      @outdir = @doc.dir + "/" + $options[@Type][:path]
+      FileUtils.mkpath @outdir if ! File.directory?(@outdir)
+      @outfile = "#{@outdir}/" + @doc.file.gsub(@doc.extname, ".#{$options[@Type][:ext]}")
+    else
+      if @outfile[0] !~ /^(\/|~)/
+        @outfile = @doc.dir + "/" + $options[@Type][:path] + "/" + @outfile
+      end
+
+      @outfile = @outfile.gsub(/%f/, @doc.filename)
+      @outfile = @outfile.gsub(/%F/, @doc.file)
+      @outfile = @outfile.gsub(/%D/, @doc.dir)
+      @outfile = @outfile.gsub(/%E/, @doc.extname)
+      @outfile = @outfile.gsub(/%r/, @doc.file.gsub(@doc.extname, ""))
+      @outfile = @outfile.gsub(/%t/, @Type)
+      @outfile = @outfile.gsub(/%p/, $options[@Type][:path])
+      @outfile = @outfile.gsub(/%b/, $confdir)
+      @outdir = File.dirname(@outfile)
+      FileUtils.mkpath @outdir if ! File.directory?(@outdir)
+    end
+     
+    # merge global/local yaml config 
+    @ConfFile = "%R.yaml" if @ConfFile.nil?
+    @conf = self.ReadConfig()
+
+    pp @conf if $debug
+  end
+
+  ################################################################################
+  # Need to regenerate output file ?
+  ################################################################################
+  def convertNeed?
+
+    # List of dependences 
+    srcfiles = [ "-revhistory.xml" ]
+
+    return true if not File.exists?(@outfile)
+
+    return true if File.mtime(@doc.filename) > File.mtime(@outfile)
+    return true if File.exists?($conf[:globalConfFile]) and File.mtime($conf[:globalConfFile]) > File.mtime(@outfile)
+    return true if File.exists?(@ConfFile)              and File.mtime(@ConfFile)              > File.mtime(@outfile)
+    srcfiles.each {|s|
+      f = @doc.filename.gsub(@doc.extname, s)
+      return true if File.exists?(f) and File.mtime(f) > File.mtime(@outfile)
+    }
+
+    return false
+  end
+
+  ################################################################################
+  # Convert
+  ################################################################################
+  def convert
+    case $options[@Type][:prog]
+    when "a2x"
+      self.ConvertA2X()
+    when "asciidoc"
+      self.ConvertASCIIDOC()
+    else
+      puts "Error prog : unsupported type : #{@Type}"
+      exit 
+    end
+  end
+
+  ################################################################################
+  # Convert using a2x tool
+  ################################################################################
+  def ConvertA2X
+    # a2x options
+    if not @FullOpts.nil?
+      opts = @FullOpts + " "
+    else
+      opts = self.getOptionsA2X()
+    end
+
+    opts += @Opts + " " if not @Opts.nil?
+
+    opts += "-v " if $debug2
+  
+    # Execute pre actions
+    self.ExecuteAction(:pre)
+  
+    cmd = "a2x -D #{@outdir} #{opts} #{@doc.filename}"
+    puts "Generating (#{@Type}) #{@outfile}\n"
+    puts "Executing : #{cmd}" if $verbose
+    res = %x[#{cmd}]
+    puts res if res != ""
+  
+    if $? == 0
+      # Execute post actions
+      self.ExecuteAction(:post)
+    end
+
+  end
+
+  ################################################################################
+  # Convert using asciidoc tool
+  ################################################################################
+  def ConvertASCIIDOC
+
+    # asciidoc options
+    if not @FullOpts.nil?
+      opts = @FullOpts + " "
+    else
+      opts = self.getOptionsAsciidoc()
+    end
+
+    opts += @Opts + " " if not @Opts.nil?
+
+    opts += "-v " if $debug2
+
+    # Execute pre actions
+    self.ExecuteAction(:pre)
+
+    cmd = "asciidoc -o #{@outfile} #{opts} #{@doc.filename}"
+    puts "Generating (#{@Type}) #{@outfile}\n"
+    puts "Executing : #{cmd}" if $verbose
+    res = %x[#{cmd}]
+    puts res if res != ""
+
+    if $? == 0
+      # Execute post actions
+      self.ExecuteAction(:post)
+    end
+
+  end
+
+  ################################################################################
+  # Execute action
+  ################################################################################
+  def ExecuteAction(typeAction)
+    if not @conf["tools::" + @Type + "::" + typeAction.to_s].nil?
+      @conf["tools::" + @Type + "::" + typeAction.to_s].each {|t|
+        t = t.gsub(/%f/, @doc.filename)
+        t = t.gsub(/%F/, @doc.file)
+        t = t.gsub(/%D/, @doc.dir)
+        t = t.gsub(/%E/, @doc.extname)
+        t = t.gsub(/%r/, @doc.file.gsub(@doc.extname, ""))
+        t = t.gsub(/%t/, @Type)
+        t = t.gsub(/%o/, @outfile)
+        t = t.gsub(/%O/, @outdir)
+        t = t.gsub(/%b/, $confdir)
+  
+        cmd = "#{t}"
+        puts "Executing (" + typeAction.to_s + ") : #{cmd}" if $verbose
+        res = %x[#{cmd}]
+        puts res if res != ""
+      }
+    end
+  end
+
+  ################################################################################
+  # Get a2x options
+  ################################################################################
+  def getOptionsA2X()
+    opts = ""
+
+    # Templatisation config a2x
+    a2xconf = ERB.new File.new("#{$confdir}/a2x.conf.tpl").read
+    File.open("#{$confdir}/a2x.conf", 'w') do |f|
+      f.write a2xconf.result(binding)
+    end
+    opts += "--conf-file #{$confdir}/a2x.conf " if File.exists?("#{$confdir}/a2x.conf")
+  
+    # asciidoc options
+    asciidocopts = self.getOptionsAsciidoc()
+    opts += "--asciidoc-opts \"#{asciidocopts}\" " if asciidocopts != ""
+  
+    # dblatex options
+    dblatexopts = ""
+    conf["dblatex::options"].each {|o|
+      dblatexopts += "#{o} "
+    }
+    conf["dblatex::params"].each {|o|
+      o = o.gsub(/"/, "\\\"")
+      dblatexopts += "-P #{o} "
+    }
+    conf["dblatex::xsl"].each {|o|
+      if o[0] !~ /^(\/|~)/
+        o = "#{$confdir}/dblatex/#{o}" if File.exists?("#{$confdir}/dblatex/#{o}")
+        o = "#{@doc.dir}/#{o}"         if File.exists?("#{@doc.dir}/#{o}")
+      end
+  
+      if File.exists?(o)
+        dblatexopts += "-p #{o} "
+      else
+        puts "Skip missing config file : #{o}"
+      end
+    }
+    conf["dblatex::sty"].each {|o|
+      if o[0] !~ /^(\/|~)/
+        o = "#{$confdir}/dblatex/#{o}" if File.exists?("#{$confdir}/dblatex/#{o}")
+        o = "#{@doc.dir}/#{o}"         if File.exists?("#{@doc.dir}/#{o}")
+      end
+  
+      if File.exists?(o)
+        dblatexopts += "-s #{o} "
+      else
+        puts "Skip missing config file : #{o}"
+      end
+    }
+    opts += "--dblatex-opts \"#{dblatexopts}\" " if dblatexopts != ""
+    # where to find images...
+    opts += "--dblatex-opts \"-I #{@doc.dir}\" "
+  
+    opts += "--dblatex-opts \"-d\" " if $debug2
+  
+    # a2x options
+    conf["a2x::options"].each {|o|
+      opts += "#{o} "
+    }
+
+    return opts
+  end
+
+  ################################################################################
+  # Get asciidoc options
+  ################################################################################
+  def getOptionsAsciidoc()
+
+    # asciidoc options
+    asciidocopts = ""
+    if not @conf["asciidoc::" + @Type + "::options"].nil?
+      @conf["asciidoc::" + @Type + "::options"].each {|o|
+        asciidocopts += "#{o} "
+      } 
+    end
+
+    if not @conf["asciidoc::" + @Type + "::attributes"].nil?
+      @conf["asciidoc::" + @Type + "::attributes"].each {|o|
+        asciidocopts += "-a #{o} "
+      } 
+    end
+
+    if not @conf["asciidoc::" + @Type + "::config"].nil?
+      @conf["asciidoc::" + @Type + "::config"].each {|o|
+        if o[0] !~ /^(\/|~)/
+          o = "#{$confdir}/asciidoc/#{o}" if File.exists?("#{$confdir}/asciidoc/#{o}")
+          o = "#{@conf["dir"]}/#{o}"      if File.exists?("#{@conf["dir"]}/#{o}")
+        end
+  
+        if File.exists?(o)
+          asciidocopts += "-f #{o} "
+        else
+          puts "Skip missing config file : #{o}"
+        end
+      }
+    end
+
+    return asciidocopts
+  end
+
+  ################################################################################
+  # Read optional file parameters
+  ################################################################################
+  def ReadConfig()
 
     # Deep copy 
+    puts "Reading global config file #{$conf[:globalConfFile]}" if $verbose
     conf = Marshal.load( Marshal.dump($conf) )
 
-    extname = File.extname(filename)
-    optfile = filename.gsub(extname, ".yaml")
+    if @ConfFile.nil?
+      return conf
+    end
+
+    optfile = @ConfFile
+    optfile = optfile.gsub(/%f/, @doc.filename)
+    optfile = optfile.gsub(/%F/, @doc.file)
+    optfile = optfile.gsub(/%D/, @doc.dir)
+    optfile = optfile.gsub(/%E/, @doc.extname)
+    optfile = optfile.gsub(/%R/, @doc.dir + "/" + @doc.file.gsub(@doc.extname, ""))
+    optfile = optfile.gsub(/%r/, @doc.file.gsub(@doc.extname, ""))
+    optfile = optfile.gsub(/%t/, @Type)
+    optfile = optfile.gsub(/%b/, $confdir)
+
+    conf["conffile"] = optfile
+    conf["filename"] = @doc.filename
+    conf["dir"] = @doc.dir
+
     if File.exists?(optfile)
       begin
+        puts "Reading specific config file #{optfile}" if $verbose
         c = YAML.load_file(optfile)
 
         # surcharge d'options
@@ -124,185 +497,51 @@ def ReadConfig(filename)
       rescue
         puts "Error loading #{optfile}"
       end
+    else
+      puts "Skip loading unknown specific config file #{optfile}" if $verbose
     end
 
-    conf["filename"] = filename
-    conf["dir"] = File.dirname(filename)
-    return conf
-end
-
-################################################################################
-# Get asciidoc options
-################################################################################
-def getOptionsAsciidoc(conf, type)
-
-    # asciidoc options
-    asciidocopts = ""
-    conf["asciidoc::" + type.to_s + "::options"].each {|o|
-      asciidocopts += "#{o} "
-    } 
-    conf["asciidoc::" + type.to_s + "::attributes"].each {|o|
-      asciidocopts += "-a #{o} "
-    } 
-    conf["asciidoc::" + type.to_s + "::config"].each {|o|
-      if o[0] !~ /^(\/|~)/
-        o = "#{$confdir}/asciidoc/#{o}" if File.exists?("#{$confdir}/asciidoc/#{o}")
-        o = "#{conf["dir"]}/#{o}"       if File.exists?("#{conf["dir"]}/#{o}")
-      end
-
-      if File.exists?(o)
-        asciidocopts += "-f #{o} "
+    conf.each {|k,v|
+      if v.class == Array
+        conf[k].each_index {|i|
+           conf[k][i].gsub!(/%b/, $confdir)
+        }
       else
-        puts "Skip missing config file : #{o}"
+        conf[k].gsub!(/%b/, $confdir)
       end
     }
-    return asciidocopts
-end
 
-################################################################################
-# Copy files (html resources images...)
-################################################################################
-def CopyResources(conf, type)
-
-    return if conf[type].nil?
-
-    # Copy resources
-    conf[type].each {|r|
-      next if ! File.exists?("#{$curdir}/#{r}")
-      opts = ""
-      opts += "-v " if $debug
-      cmd = "rsync -a #{opts} #{$curdir}/#{r} #{$curdir}/#{$html_folder}/"
-      puts "Executing : #{cmd}" if $verbose
-      res = %x[#{cmd}]
-      puts res if res != ""
-    }
+    return conf
+  end
 
 end
 
 
+
 ################################################################################
-desc "Generate PDF files from .asciidoc or .txt files"
+desc "Generate xxx files from .asciidoc or .txt files"
 ################################################################################
-task :genpdf, [:filelist] do |t, args|
+task :gen, [:filelist] do |t, args|
     args.with_defaults(:filelist => [])
     filelist = args[:filelist]
 
-    # List of dependences 
-    srcfiles = [ "-revhistory.xml", ".yaml" ]
-
-    # Templatisation config a2x
-    a2xconf = ERB.new File.new("#{$confdir}/a2x.conf.tpl").read
-    File.open("#{$confdir}/a2x.conf", 'w') do |f|
-      f.write a2xconf.result(binding)
-    end
-
     until filelist.empty?
-        Thread.new { 
+#        Thread.new { 
             filename = filelist.pop
             next if filename.nil?
+            doc = Doc.new(filename)
+            next if doc.getConvertList.nil?
 
-            puts "Processing #{filename}\n" if $verbose
-            extname = File.extname(filename)
-            dir = File.dirname(filename)
-            file = File.basename(filename)
-            outdir = "#{dir}/#{$pdf_folder}"
-            FileUtils.mkpath outdir if ! File.directory?(outdir)
-            outfile = "#{outdir}/" + file.gsub(extname, ".pdf")
+            (doc.getConvertList).each {|convert|
+              convertDoc = ConvertDoc.new(doc, convert)
+              next if convertDoc.Type.nil?
+              next if not $filter.nil? and convertDoc.Type != $filter.to_s
+              next if not convertDoc.convertNeed? and not $force
 
-            # need to regenerate pdf ?
-            generate = false
-            if File.exists?(outfile)
-              generate = true if File.mtime(filename) > File.mtime(outfile)
-              srcfiles.each {|s|
-                f = filename.gsub(extname, s)
-                generate = true if File.exists?(f) and File.mtime(f) > File.mtime(outfile)
-              }
-            else
-              generate = true
-            end
-            
-            # merge global/local yaml config 
-            conf = ReadConfig(filename)
+              convertDoc.convert
+            }
 
-            if generate or $force
-              opts = ""
-              opts += "--conf-file #{$confdir}/a2x.conf " if File.exists?("#{$confdir}/a2x.conf")
-
-              # asciidoc options
-              asciidocopts = getOptionsAsciidoc(conf, :pdf)
-              opts += "--asciidoc-opts \"#{asciidocopts}\" " if asciidocopts != ""
-
-              # dblatex options
-              dblatexopts = ""
-              conf["dblatex::options"].each {|o|
-                dblatexopts += "#{o} "
-              }
-              conf["dblatex::params"].each {|o|
-                o = o.gsub(/"/, "\\\"")
-                dblatexopts += "-P #{o} "
-              }
-              conf["dblatex::xsl"].each {|o|
-                if o[0] !~ /^(\/|~)/
-                  o = "#{$confdir}/dblatex/#{o}" if File.exists?("#{$confdir}/dblatex/#{o}")
-                  o = "#{dir}/#{o}"      if File.exists?("#{dir}/#{o}")
-                end
-
-                if File.exists?(o)
-                  dblatexopts += "-p #{o} "
-                else
-                  puts "Skip missing config file : #{o}"
-                end
-              }
-              opts += "--dblatex-opts \"#{dblatexopts}\" " if dblatexopts != ""
-              # where to find images...
-              opts += "--dblatex-opts \"-I #{dir}\" "
-
-              # a2x options
-              conf["a2x::options"].each {|o|
-                opts += "#{o} "
-              }
-              opts += "-v " if $debug
-
-              # Execute pre actions
-              conf["tools::pdf::pre"].each {|t|
-                t = t.gsub(/%f/, filename)
-                t = t.gsub(/%F/, file)
-                t = t.gsub(/%D/, dir)
-                t = t.gsub(/%E/, extname)
-                t = t.gsub(/%r/, file.gsub(extname, ""))
-                t = t.gsub(/%o/, outfile)
-                t = t.gsub(/%O/, outdir)
-
-                cmd = "#{t}"
-                puts "Executing : #{cmd}" if $verbose
-                res = %x[#{cmd}]
-                puts res if res != ""
-              }
-
-              cmd = "a2x -D #{outdir} #{opts} #{filename}"
-              puts "Generating #{outfile}\n"
-              puts "Executing : #{cmd}" if $verbose
-              res = %x[#{cmd}]
-              puts res if res != ""
-
-              # Execute post actions
-              conf["tools::pdf::post"].each {|t|
-                t = t.gsub(/%f/, filename)
-                t = t.gsub(/%F/, file)
-                t = t.gsub(/%D/, dir)
-                t = t.gsub(/%E/, extname)
-                t = t.gsub(/%r/, file.gsub(extname, ""))
-                t = t.gsub(/%o/, outfile)
-                t = t.gsub(/%O/, outdir)
-
-                cmd = "#{t}"
-                puts "Executing : #{cmd}" if $verbose
-                res = %x[#{cmd}]
-                puts res if res != ""
-              }
-
-            end
-        } unless Thread.list.length > 32
+#        } unless Thread.list.length >= 2
     end
     loop do
         if Thread.list.length < 2
@@ -312,105 +551,5 @@ task :genpdf, [:filelist] do |t, args|
     end
 end
 
-
-################################################################################
-desc "Generate HTML files from .asciidoc files"
-################################################################################
-task :genhtml, [:filelist, :theme, :backend] do |t, args|
-    args.with_defaults(:filelist => [], :theme => "pryz", :backend => "lofic_backend")
-    filelist = args[:filelist]
-
-    # List of dependences 
-    srcfiles = [ ".yaml" ]
-
-    until filelist.empty?
-        Thread.new { 
-            filename=filelist.pop
-            next if filename.nil?
-
-            puts "Processing #{filename}\n" if $verbose
-            extname = File.extname(filename)
-            dir = File.dirname(filename)
-            file = File.basename(filename)
-            outdir = "#{dir}/#{$html_folder}"
-            FileUtils.mkpath outdir if ! File.directory?(outdir)
-            outfile = "#{outdir}/" + file.gsub(extname, ".html")
-
-            # need to regenerate html ?
-            generate = false
-            if File.exists?(outfile)
-              generate = true if File.mtime(filename) > File.mtime(outfile)
-              srcfiles.each {|s|
-                f = filename.gsub(extname, s)
-                generate = true if File.exists?(f) and File.mtime(f) > File.mtime(outfile)
-              }
-            else
-              generate = true
-            end
-
-            # merge global/local yaml config 
-            conf = ReadConfig(filename)
-
-            if generate or $force
-              # Copy resources locales
-              CopyResources(conf, "html::copy_resources")
-
-              # asciidoc options
-              asciidocopts = getOptionsAsciidoc(conf, :html)
-
-              asciidocopts += "-v " if $debug
-
-              # Execute pre actions
-              conf["tools::html::pre"].each {|t|
-                t = t.gsub(/%f/, filename)
-                t = t.gsub(/%F/, file)
-                t = t.gsub(/%D/, dir)
-                t = t.gsub(/%E/, extname)
-                t = t.gsub(/%r/, file.gsub(extname, ""))
-                t = t.gsub(/%o/, outfile)
-                t = t.gsub(/%O/, outdir)
-
-                cmd = "#{t}"
-                puts "Executing : #{cmd}" if $verbose
-                res = %x[#{cmd}]
-                puts res if res != ""
-              }
-
-              cmd = "asciidoc -o #{outfile} #{asciidocopts} --backend=#{args.backend} --theme=#{args.theme} #{filename}"
-              puts "Generating #{outfile}\n"
-              puts "Executing : #{cmd}" if $verbose
-              res = %x[#{cmd}]
-              puts res if res != ""
-
-              # Execute post actions
-              conf["tools::html::post"].each {|t|
-                t = t.gsub(/%f/, filename)
-                t = t.gsub(/%F/, file)
-                t = t.gsub(/%D/, dir)
-                t = t.gsub(/%E/, extname)
-                t = t.gsub(/%r/, file.gsub(extname, ""))
-                t = t.gsub(/%o/, outfile)
-                t = t.gsub(/%O/, outdir)
-
-                cmd = "#{t}"
-                puts "Executing : #{cmd}" if $verbose
-                res = %x[#{cmd}]
-                puts res if res != ""
-              }
-
-            end
-        } unless Thread.list.length > 32
-    end
-    loop do
-        if Thread.list.length < 2
-            break
-        end
-        sleep 0.1
-    end
-
-    # Copy resources globales (only once per rake call)
-    CopyResources($conf, "html::copy_global_resources")
-
-end
 
 

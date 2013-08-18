@@ -2,16 +2,6 @@
 # asciidoc -> pdf  : a2x -> asciidoc -> xsltproc -> dblatex
 # asciidoc -> html : asciidoc -> html
 
-#############################################
-# Global listing of directories to copy into html/
-# (use html::copy_resources on local yaml files)
-#############################################
-html::copy_resources:
-html::copy_global_resources:
-  - Schemas
-  - Images
-  - schemas
-  - images
 
 #############################################
 # defaults options for asciidoc documents (html)
@@ -21,6 +11,10 @@ asciidoc::html::options:
   #- "-v"
   # Auto-number sections
   - "-n"
+  # backend
+  - "--backend=lofic_backend"
+  # theme
+  - "--theme=pryz"
 
 #############################################
 # defaults config files for asciidoc documents (html)
@@ -33,6 +27,61 @@ asciidoc::html::config:
 asciidoc::html::attributes:
   # Table of Content
   - toc
+  # Embbed ressources (images, css...)
+  - data-uri
+  # icons
+  - icons
+  - iconsdir=%b/icons
+
+#############################################
+# defaults options for asciidoc documents (slidy)
+#############################################
+asciidoc::slidy::options:
+  - "-b slidy"
+  # verbose mode
+  #- "-v"
+  # Auto-number sections
+  - "-n"
+
+#############################################
+# defaults config files for asciidoc documents (slidy)
+#############################################
+asciidoc::slidy::config:
+
+#############################################
+# defaults attributes for asciidoc documents (slidy)
+#############################################
+asciidoc::slidy::attributes:
+  # Embbed ressources (images, css...)
+  - data-uri
+  # icons
+  - icons
+  - iconsdir=%b/icons
+
+#############################################
+# defaults options for asciidoc documents (slidy2)
+#############################################
+asciidoc::slidy2::options:
+  - "-b slidy2"
+  # verbose mode
+  #- "-v"
+  # Auto-number sections
+  - "-n"
+
+#############################################
+# defaults config files for asciidoc documents (slidy2)
+#############################################
+asciidoc::slidy2::config:
+
+#############################################
+# defaults attributes for asciidoc documents (slidy2)
+#############################################
+asciidoc::slidy2::attributes:
+  # Embbed ressources (images, css...)
+  - data-uri
+  # icons
+  - icons
+  - iconsdir=%b/icons
 
 #############################################
 # defaults options for asciidoc documents (pdf)
@@ -84,13 +133,19 @@ dblatex::params:
   # pas de logo dblatex
   - doc.publisher.show=0
 
-
 #############################################
 # defaults xsl for dblatex backend
 #############################################
 dblatex::xsl:
   # roles fonts
   - roles-fonts.xsl
+
+#############################################
+# defaults sty for dblatex backend
+#############################################
+dblatex::sty:
+  # header/footer
+  #- custom-frontpage-and-footer.sty
 
 
 
@@ -101,8 +156,10 @@ dblatex::xsl:
 #  %D : input dirname (/path1/path2)
 #  %E : input extension (.txt)
 #  %r : input filename without extension (file)
+#  %t : type of conversion (pdf, html, slidy...)
 #  %o : full output filename (/path1/path2/pdf/file.pdf)
-#  %o : output dirname (/path1/path2/pdf)
+#  %O : output dirname (/path1/path2/pdf)
+#  %b : basedir of project (Rakefile place)
 ####################################################
 
 #############################################
@@ -123,11 +180,40 @@ tools::pdf::post:
 # Preprocessing tools before html generation
 #############################################
 tools::html::pre:
+  # Sample code to copy ressources files (would be not necessary with data-uri attribute)
+  #- "[ -d '%D/images' ]  && rsync -a '%D/images'  '%O/'"
+  #- "[ -d '%D/Images' ]  && rsync -a '%D/Images'  '%O/'"
+  #- "[ -d '%D/schemas' ] && rsync -a '%D/schemas' '%O/'"
+  #- "[ -d '%D/Schemas' ] && rsync -a '%D/Schemas' '%O/'"
 
 #############################################
 # Postprocessing tools after html generation
 #############################################
 tools::html::post:
+  # Remove footer
+  - sed -i '/^Last updated/d' %o
+
+#############################################
+# Preprocessing tools before slidy generation
+#############################################
+tools::slidy::pre:
+
+#############################################
+# Postprocessing tools after slidy generation
+#############################################
+tools::slidy::post:
+  # Remove footer
+  - sed -i '/^Last updated/d' %o
+
+#############################################
+# Preprocessing tools before slidy2 generation
+#############################################
+tools::slidy2::pre:
+
+#############################################
+# Postprocessing tools after slidy2 generation
+#############################################
+tools::slidy2::post:
   # Remove footer
   - sed -i '/^Last updated/d' %o
 
