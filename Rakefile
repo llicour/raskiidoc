@@ -3,6 +3,7 @@ require 'fileutils'
 require 'yaml'
 require 'pp'
 require 'erb'
+require 'tmpdir'
 
 $DEBUG=1
 
@@ -62,17 +63,21 @@ task :default do
     $force   = (ENV["FORCE"].nil?)?false:true
     $curdir  = ENV["PWD"]
 
-    # Load config file
-    begin
-      $conf = YAML.load_file("#{$confdir}/#{$globalConfFile}")
-    rescue
-      puts "Unable to locate #{$confdir}/#{$globalConfFile}"
-      $conf = {}
-    end
-    $sections.each {|o|
-      $conf[o] = [] if $conf[o].nil?
+    $conf = ReadGlobalConfig()
+
+    $conf[:tmpDir] = Dir.mktmpdir
+
+    # Templating files
+    $conf[:tplOutDir] = "#{$conf[:tmpDir]}/templates"
+    FileUtils.mkpath $conf[:tplOutDir] if ! File.directory?($conf[:tplOutDir])
+    Dir.glob("#{$confdir}/**/*.tpl") {|tpl|
+      tploutfile = "#{$conf[:tplOutDir]}/" + tpl.gsub("#{$confdir}/", "").gsub(/.tpl$/, "")
+      FileUtils.mkpath File.dirname(tploutfile) if ! File.directory?(File.dirname(tploutfile))
+      tplfile = ERB.new File.new(tpl).read
+      File.open(tploutfile, 'w') do |f|
+        f.write tplfile.result(binding)
+      end
     }
-    $conf[:globalConfFile] = "#{$confdir}/#{$globalConfFile}"
 
     filelist = []
     if ENV["FILE"].nil?
@@ -92,6 +97,8 @@ task :default do
     end
 
     Rake::Task[:gen].invoke(Array.new(filelist))
+
+    FileUtils.remove_entry $conf[:tmpDir]
 end
 
 task :pdf do
@@ -345,12 +352,11 @@ class ConvertDoc
   def getOptionsA2X()
     opts = ""
 
-    # Templatisation config a2x
-    a2xconf = ERB.new File.new("#{$confdir}/a2x.conf.tpl").read
-    File.open("#{$confdir}/a2x.conf", 'w') do |f|
-      f.write a2xconf.result(binding)
-    end
-    opts += "--conf-file #{$confdir}/a2x.conf " if File.exists?("#{$confdir}/a2x.conf")
+    a2xConf = ""
+    a2xConf = "#{$conf[:tplOutDir]}/a2x.conf" if File.exists?("#{$conf[:tplOutDir]}/a2x.conf")
+    a2xConf = "#{$confdir}/a2x.conf"          if File.exists?("#{$confdir}/a2x.conf")
+    a2xConf = "#{@doc.dir}/a2x.conf"          if File.exists?("#{@doc.dir}/a2x.conf")
+    opts += "--conf-file #{a2xConf} " if File.exists?(a2xConf)
   
     # asciidoc options
     asciidocopts = self.getOptionsAsciidoc()
@@ -367,8 +373,9 @@ class ConvertDoc
     }
     conf["dblatex::xsl"].each {|o|
       if o[0] !~ /^(\/|~)/
-        o = "#{$confdir}/dblatex/#{o}" if File.exists?("#{$confdir}/dblatex/#{o}")
-        o = "#{@doc.dir}/#{o}"         if File.exists?("#{@doc.dir}/#{o}")
+        o = "#{$conf[:tplOutDir]}/dblatex/#{o}" if File.exists?("#{$conf[:tplOutDir]}/dblatex/#{o}")
+        o = "#{$confdir}/dblatex/#{o}"          if File.exists?("#{$confdir}/dblatex/#{o}")
+        o = "#{@doc.dir}/#{o}"                  if File.exists?("#{@doc.dir}/#{o}")
       end
   
       if File.exists?(o)
@@ -379,8 +386,9 @@ class ConvertDoc
     }
     conf["dblatex::sty"].each {|o|
       if o[0] !~ /^(\/|~)/
-        o = "#{$confdir}/dblatex/#{o}" if File.exists?("#{$confdir}/dblatex/#{o}")
-        o = "#{@doc.dir}/#{o}"         if File.exists?("#{@doc.dir}/#{o}")
+        o = "#{$conf[:tplOutDir]}/dblatex/#{o}" if File.exists?("#{$conf[:tplOutDir]}/dblatex/#{o}")
+        o = "#{$confdir}/dblatex/#{o}"          if File.exists?("#{$confdir}/dblatex/#{o}")
+        o = "#{@doc.dir}/#{o}"                  if File.exists?("#{@doc.dir}/#{o}")
       end
   
       if File.exists?(o)
@@ -425,8 +433,9 @@ class ConvertDoc
     if not @conf["asciidoc::" + @Type + "::config"].nil?
       @conf["asciidoc::" + @Type + "::config"].each {|o|
         if o[0] !~ /^(\/|~)/
-          o = "#{$confdir}/asciidoc/#{o}" if File.exists?("#{$confdir}/asciidoc/#{o}")
-          o = "#{@conf["dir"]}/#{o}"      if File.exists?("#{@conf["dir"]}/#{o}")
+          o = "#{$conf[:tplOutDir]}/asciidoc/#{o}" if File.exists?("#{$conf[:tplOutDir]}/asciidoc/#{o}")
+          o = "#{$confdir}/asciidoc/#{o}"          if File.exists?("#{$confdir}/asciidoc/#{o}")
+          o = "#{@conf["dir"]}/#{o}"               if File.exists?("#{@conf["dir"]}/#{o}")
         end
   
         if File.exists?(o)
@@ -471,6 +480,7 @@ class ConvertDoc
       begin
         puts "Reading specific config file #{optfile}" if $verbose
         c = YAML.load_file(optfile)
+        raise "Invalid yaml file" if not c
 
         # surcharge d'options
         $sections.each {|s|
@@ -517,6 +527,70 @@ class ConvertDoc
 end
 
 
+################################################################################
+# Read optional file parameters
+################################################################################
+def ReadGlobalConfig()
+
+  # Load config file
+  begin
+    conf = YAML.load_file("#{$confdir}/#{$globalConfFile}")
+  rescue
+    puts "Unable to locate #{$confdir}/#{$globalConfFile}"
+    conf = {}
+  end
+
+  $sections.each {|o|
+    conf[o] = [] if conf[o].nil?
+  }
+  conf[:globalConfFile] = "#{$confdir}/#{$globalConfFile}"
+
+  altConfFile = "#{$curdir}/.rake/#{$globalConfFile}"
+  if File.exists?(altConfFile)
+    begin
+      puts "Reading local config file #{altConfFile}" if $verbose
+      c = YAML.load_file(altConfFile)
+      raise "Invalid yaml file" if not c
+
+      # surcharge d'options
+      $sections.each {|s|
+        next if c[s].nil?
+        if $sections_uniq.include?(s)
+          # remove then add option
+          c[s].each {|o|
+            o2 = o.gsub(/=.*/, "=")
+            conf[s].delete_if {|o3| o3.start_with?(o2)}
+            conf[s].push o
+          }
+        else
+          c[s].each {|o|
+            if o[0] == "!"
+              # delete option
+              conf[s].delete o[1..-1]
+            else
+              # just add option
+              conf[s].push o
+            end
+          }
+        end
+      }
+    rescue
+      puts "Error loading #{altConfFile}"
+    end
+  end
+  
+  conf.each {|k,v|
+    if v.class == Array
+      conf[k].each_index {|i|
+         conf[k][i].gsub!(/%b/, $confdir)
+      }
+    else
+      conf[k].gsub!(/%b/, $confdir)
+    end
+  }
+
+  return conf
+end
 
 ################################################################################
 desc "Generate xxx files from .asciidoc or .txt files"

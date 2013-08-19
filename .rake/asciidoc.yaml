@@ -3,6 +3,20 @@
 # asciidoc -> html : asciidoc -> html
 
 
+vars::CoverPage::Logo1Filename: "%b/images/think_logo_new_big1.png"
+vars::CoverPage::Logo1Size: "0.35"
+vars::CoverPage::TitleLevel1: '\DBKtitle'
+vars::CoverPage::TitleLevel2: "Title level 2"
+vars::CoverPage::TitleLevel3: "Title level 3"
+vars::CoverPage::LabelBottomRight: "Company:"
+vars::CoverPage::LabelBottomLeft: "Author:"
+vars::CoverPage::TextBottomRight: "Think"
+vars::CoverPage::TextBottomCenter: '\today'
+vars::CoverPage::TextBottomLeft: '\DBKauthor'
+vars::Pages::FooterLeft: "left footer"
+vars::Pages::FooterCenter: '\thepage{} / \getpagerefnumber{LastPage}'
+vars::Pages::FooterRight: "right footer"
+
 #############################################
 # defaults options for asciidoc documents (html)
 #############################################
@@ -145,7 +159,7 @@ dblatex::xsl:
 #############################################
 dblatex::sty:
   # header/footer
-  #- custom-frontpage-and-footer.sty
+  - custom-frontpage-and-footer.sty
 
 
 

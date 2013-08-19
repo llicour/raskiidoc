@@ -39,9 +39,9 @@
 \chead[]{}
 \lhead[]{}
 \rhead[]{\@ifundefined{chaptername}{test chapter name}{\chaptername}}
-\lfoot[]{\@ifundefined{DBKpublisher}{left footer}{\DBKpublisher}}
-\rfoot[]{\@ifundefined{DBKpublisher}{right footer}{\DBKpublisher}}
-\cfoot[]{\textsf{\thepage{} / \getpagerefnumber{LastPage}}}
+\lfoot[]{\@ifundefined{DBKpublisher}{<%= $conf["vars::Pages::FooterLeft"] %>}{\DBKpublisher}}
+\rfoot[]{\@ifundefined{DBKpublisher}{<%= $conf["vars::Pages::FooterRight"] %>}{\DBKpublisher}}
+\cfoot[]{\textsf{<%= $conf["vars::Pages::FooterCenter"] %>}}
 % Fancy header/footer for the front matter
 \def\DBKcheadfront{%
 	\DBKtitle{} \edhead%
@@ -50,7 +50,7 @@
 \def\DBKcheadbody{%
 	\DBKtitle{} \edhead%
 }
-\lhead[]{ toto }
+% \lhead[]{}
 % \rhead[]{}
 % \renewcommand{\headrulewidth}{0.4pt}
 % \renewcommand{\footrulewidth}{0.4pt}
@@ -60,34 +60,40 @@
 \renewcommand{\maketitle}{
 	\begin{titlepage}%
 	\thispagestyle{empty} % Removes header and footer from the cover page
-	% \thispagestyle{plain} % Adds header and footer to the cover page
+	 %\thispagestyle{plain} % Adds header and footer to the cover page
 		\begin{center}%
 			% Upper part of the page
-			\includegraphics[width=0.35\textwidth]{../../../.rake/images/think_logo_new_big1.png}\\[5cm]
-			% \textsc{\LARGE My Company (To be changed in the .sty file}\\[1.5cm]
-			%\textsc{\Large Final year project (To be changed in the .sty file}\\[0.5cm]
+      <% if not $conf["vars::CoverPage::Logo1Filename"].nil? %>
+			\includegraphics[width=<%= $conf["vars::CoverPage::Logo1Size"] %>\textwidth]{<%= $conf["vars::CoverPage::Logo1Filename"] %>}\\[5cm]
+      <% end %>
+      <% if not $conf["vars::CoverPage::TitleLevel2"].nil? %>
+			\textsc{\LARGE <%= $conf["vars::CoverPage::TitleLevel2"] %>}\\[1.5cm]
+      <% end %>
+      <% if not $conf["vars::CoverPage::TitleLevel3"].nil? %>
+			\textsc{\Large <%= $conf["vars::CoverPage::TitleLevel3"] %>}\\[0.5cm]
+      <% end %>
 			% Title
 			\HRule \\[0.4cm]
-			{ \huge \bfseries \DBKtitle}\\[0.4cm]
+			{ \huge \bfseries <%= $conf["vars::CoverPage::TitleLevel1"] %>}\\[0.4cm]
 			\HRule \\[1.5cm]
 			\vfill
 			% Author and company
 			\begin{minipage}{0.4\textwidth}%
 				\begin{flushleft} \large
-					\emph{Author:}\\
-					{\DBKauthor}
+					\emph{<%= $conf["vars::CoverPage::LabelBottomLeft"] %>}\\
+				<%= $conf["vars::CoverPage::TextBottomLeft"] %>
 				\end{flushleft}
 			\end{minipage}
 			\begin{minipage}{0.4\textwidth}
 				\begin{flushright} \large
-					\emph{Company:} \\
-				Think
+					\emph{<%= $conf["vars::CoverPage::LabelBottomRight"] %>} \\
+				<%= $conf["vars::CoverPage::TextBottomRight"] %>
 				\end{flushright}
 			\end{minipage}
 			% Bottom of the page
 			\begin{minipage}{0.4\textwidth}
 				\begin{center}
-					\large \today
+					\large <%= $conf["vars::CoverPage::TextBottomCenter"] %>
 				\end{center}
 			\end{minipage}
 		\end{center}%
