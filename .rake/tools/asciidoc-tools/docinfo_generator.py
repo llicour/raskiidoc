@@ -428,12 +428,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--verbose', action='count', 
 	help='Prints out more information during the processing status.')
+    parser.add_argument('-o', '--output', action='store', 
+	help='Output filename')
     parser.add_argument('asciidoc_input_file_name', 
 	help='Asciidoc input file name.')
     args = parser.parse_args()
     VERBOSE = args.verbose # To be able to enable multiple levels of verbosity
     # if(args.usage): usage()
     input_filename = args.asciidoc_input_file_name
+    output_filename = args.output
     del(args)
 
     # Proceed if file exists
@@ -460,7 +463,9 @@ def main():
         if(VERBOSE > 0):
             print("[INFO] Begining XML file generation.")
         # writing output to the target file name
-        out_f = open(doc_item.gen_docinfo_filename(input_filename), 'w')
+        if output_filename == None:
+            output_filename = doc_item.gen_docinfo_filename(input_filename)
+        out_f = open(output_filename, 'w')
         out_f.write(doc_item.gen_xml_from_self(''))
         out_f.close()
         if(VERBOSE > 0):

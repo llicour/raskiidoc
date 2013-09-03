@@ -1,0 +1,14 @@
+---
+dblatex::params:
+  - doc.toc.show=0
+
+file::options:
+  #- ":noconvert:"
+
+gpg::encrypt: true
+gpg::recipients:
+  # laurent@licour.com
+  - DA160AA2
+  # laurent.licour@think.fr
+  - 210EE507
+

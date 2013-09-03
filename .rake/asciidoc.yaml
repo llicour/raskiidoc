@@ -173,7 +173,8 @@ dblatex::sty:
 #  %t : type of conversion (pdf, html, slidy...)
 #  %o : full output filename (/path1/path2/pdf/file.pdf)
 #  %O : output dirname (/path1/path2/pdf)
-#  %b : basedir of project (Rakefile place)
+#  %B : basedir of project (Rakefile place)
+#  %b : confdir of project (.rake place)
 ####################################################
 
 #############################################
@@ -181,7 +182,7 @@ dblatex::sty:
 #############################################
 tools::pdf::pre:
   # Generate docbook metadata file : *-docinfo.xml
-  - python .rake/tools/asciidoc-tools/docinfo_generator.py %f
+  - python %b/tools/asciidoc-tools/docinfo_generator.py -o %D/%r-docinfo.xml %f
 
 #############################################
 # Postprocessing tools after pdf generation

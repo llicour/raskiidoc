@@ -4,6 +4,7 @@ require 'yaml'
 require 'pp'
 require 'erb'
 require 'tmpdir'
+require 'tempfile'
 
 $DEBUG=1
 
@@ -19,6 +20,8 @@ $sections = [
               "a2x::options",
               "dblatex::options", "dblatex::params", "dblatex::xsl", "dblatex::sty",
               "html::copy_global_resources", "html::copy_resources",
+              "file::options",
+              "gpg::recipients", "gpg::encrypt",
 ]
 $options.keys.each {|t|
   $sections << "asciidoc::#{t}::attributes"
@@ -54,6 +57,7 @@ end
 desc "Default task : build html and index"
 ################################################################################
 task :default do
+    $basedir = __FILE__.gsub("/Rakefile", "")
     $confdir = __FILE__.gsub("Rakefile", "") + ".rake"
     $confdir = nil if ! File.directory?($confdir)
     $verbose = (ENV["DEBUG"].nil?)?false:true
@@ -91,8 +95,21 @@ task :default do
         f.close
         filelist.push file if l1 =~ /^= / or l2 =~ /^(=|-)+$/
       }
+
+      gpgtxtfilelist = Dir.glob("#{$curdir}/*.txt.gpg") || []
+      gpgadocfilelist = Dir.glob("#{$curdir}/*.asciidoc.gpg") || []
+      (gpgtxtfilelist + gpgadocfilelist).each {|file|
+        filelist.push file
+      }
     else
-      filelist.push $curdir + "/" + ENV["FILE"]
+      if ENV["FILE"] =~ /^\// and File.exists?(ENV["FILE"])
+        filelist.push = ENV["FILE"]
+      elsif File.exists?($curdir + "/" + ENV["FILE"])
+        filelist.push $curdir + "/" + ENV["FILE"]
+      else
+        puts "Error : unable to locate " + ENV["FILE"]
+        exit 1
+      end
       $force = true
     end
 
@@ -118,12 +135,13 @@ task :slidy2 do
     Rake::Task[:default].execute()
 end
 
+
 ################################################################################
 # Doc Class
 ################################################################################
 class Doc
 
-  attr_reader :filename, :extname, :dir, :file
+  attr_reader :filename, :extname, :dir, :file, :filename_ori
 
   def initialize(filename)
     @filename = filename
@@ -131,11 +149,63 @@ class Doc
     @dir = File.dirname(@filename)
     @file = File.basename(@filename)
     @convert_attr = nil
+    @filename_ori = nil
+
+    if @extname == ".gpg"
+      ext = File.extname(@filename.gsub(".gpg", ""))
+      @ConfFile = @dir + "/" + @file.gsub(ext + ".gpg", "") + ".yaml"
+    else
+      @ConfFile = @dir + "/" + @file.gsub(@extname, "") + ".yaml"
+    end
+    @conf = self.ReadConfig()
+
+    # Get convert instructions from config file
+    if ! @conf["file::options"].grep(/^:noconvert:$/).empty?
+      puts "Skip processing #{@filename} (noconvert tag)\n" if $verbose
+      return
+    end
+
+    if self.mustBeEncrypted?
+      if @extname == ".gpg"
+        if File.exists?(@filename.gsub(/\.gpg$/, ""))
+          puts "Error : both encrypted and unencrypted version of #{filename} detected"
+          exit 1
+        end
+      else 
+        if File.exists?(@filename + ".gpg")
+          puts "Error : both encrypted and unencrypted version of #{filename} detected"
+          exit 1
+        end
+
+        return if ! self.encrypt()
+      end
+    else
+      if @extname == ".gpg"
+        puts "Error : encrypted #{filename} detected. Please update 'gpg::encrypted' in #{@ConfFile}"
+        exit 1
+      else
+        if File.exists?(@filename + ".gpg")
+          puts "Error : both encrypted and unencrypted version of #{filename} detected (not flagged to be encrypted)"
+          exit 1
+        end
+        
+      end
+    end
+
+    if @extname == ".gpg"
+      return if ! self.decrypt()
+    end
 
     begin
       @content = IO.readlines(@filename)
     rescue => err
       puts "Exception: #{err}"
+      return
+    end
+
+    # check asciidoc format
+    if @content[0] !~ /^= / and @content[1] !~ /^(=|-)+$/
+      puts "Skip processing #{@filename} (no asciidoc document)\n" if $verbose
       return
     end
 
@@ -150,10 +220,171 @@ class Doc
     end
   end
 
+  def decrypt
+      # 1st, check all keys
+      if @conf["gpg::recipients"].nil?
+        puts "WARNING : gpg recipients can't be validated. Please configure 'gpg::recipients'"
+      else
+        cmd = "LANG= gpg --list-only -v #{@filename} 2>&1  | awk '/public key is/{print $5}' | xargs gpg --list-keys --with-colons | awk -F: '/^pub/{print substr($5,9),$10}'"
+        puts "Executing : #{cmd}" if $verbose
+        res = %x[#{cmd}]
+        if $? != 0
+          puts "Error : unable to check gpg file #{@filename}. Skip file"
+          return false
+        end
+
+        keys = res.split("\n").map {|x| x[0..7]}
+        diff1 = @conf["gpg::recipients"] - keys
+        diff2 = keys - @conf["gpg::recipients"]
+        if not diff1.empty? or not diff2.empty?
+          puts "WARNING : invalid gpg recipients for #{@filename}"
+          diff1.each {|k|
+            puts "  - missing key #{k} (reencrypt with recipient)"
+          }
+          diff2.each {|k|
+            puts "  - unknown key #{k} (not defined in configuration)"
+          }
+          puts " Current gpg recipients :"
+          res.split("\n").each {|k|
+            puts "  - key #{k[0..7]} : #{k[9..-1]}"
+          }
+        end
+          
+      end
+
+      tempfile = Tempfile.new(@file.gsub(@extname, "")+".", @dir).path
+      puts "Decrypting #{@filename} as " + File.basename(tempfile) + "..."
+      cmd = "gpg --decrypt --quiet --use-agent --yes --output #{tempfile} #{@filename}"
+      puts "Executing : #{cmd}" if $verbose
+      res = %x[#{cmd}]
+      puts res if res != ""
+      if $? != 0
+        puts "Error : unable to decrypt #{@filename}. Skip file"
+        return false
+      end
+
+      @filename_ori = @filename
+      @filename = tempfile
+      @extname = File.extname(@filename_ori.gsub(".gpg", ""))
+      @file = File.basename(@filename_ori.gsub(".gpg", ""))
+
+      return true
+  end
+
+  # identify if document is flagged to be encrypted
+  def mustBeEncrypted?
+    return false if @conf["gpg::encrypt"].nil? or @conf["gpg::encrypt"] != TRUE
+    return true
+  end
+
+  def encrypted?
+      return false if self.filename_ori.nil?
+      return true
+  end
+
+  def encrypt
+      puts "Encrypting #{@filename} ..."
+
+      gpgfilename = @filename + ".gpg"
+      if @conf["gpg::recipients"].nil? or @conf["gpg::recipients"].length == 0
+        puts "gpg error : unable to find recipient for document " + @filename
+        return false
+      end
+      opts = ""
+      @conf["gpg::recipients"].each {|r|
+        opts += "-r #{r} "
+      }
+      cmd = "gpg --encrypt --output #{gpgfilename} #{opts} #{@filename}"
+      puts "Executing : #{cmd}" if $verbose
+      res = %x[#{cmd}]
+      puts res if res != ""
+      if $? != 0
+        puts "gpg error : unable to encrypt #{@filename}"
+        return false
+      end
+
+      tempfile = Tempfile.new(@file+".", @dir).path
+      FileUtils.cp(@filename, tempfile)
+      puts "Removing unencrypted document #{@filename}"
+      File.unlink(@filename)
+
+      @filename_ori = gpgfilename
+      @filename = tempfile
+
+      return true
+  end
+   
   def getConvertList
     return @convert_attr
   end
 
+  ################################################################################
+  # Read optional file parameters
+  ################################################################################
+  def ReadConfig()
+
+    # Deep copy 
+    puts "Reading global config file #{$conf[:globalConfFile]}" if $verbose
+    conf = Marshal.load( Marshal.dump($conf) )
+
+    optfile = @ConfFile
+    conf["conffile"] = optfile
+    conf["filename"] = @filename
+    conf["dir"] = @dir
+
+    if File.exists?(optfile)
+      begin
+        puts "Reading specific config file #{optfile}" if $verbose
+        c = YAML.load_file(optfile)
+        raise "Invalid yaml file" if not c
+
+        # surcharge d'options
+        $sections.each {|s|
+          next if c[s].nil?
+          if c[s].class == Array
+            if $sections_uniq.include?(s)
+              # remove then add option
+              c[s].each {|o|
+                o2 = o.gsub(/=.*/, "=")
+                conf[s].delete_if {|o3| o3.start_with?(o2)}
+                conf[s].push o
+              }
+            else
+              c[s].each {|o|
+                if o[0] == "!"
+                  # delete option
+                  conf[s].delete o[1..-1]
+                else
+                  # just add option
+                  conf[s].push o
+                end
+              }
+            end
+          else
+            conf[s] = c[s]
+          end
+        }
+      rescue
+        puts "Error loading #{optfile}"
+      end
+    else
+      puts "Skip loading unknown specific config file #{optfile}" if $verbose
+    end
+
+    conf.each {|k,v|
+      if v.class == Array
+        conf[k].each_index {|i|
+           conf[k][i].gsub!(/%B/, $basedir) if conf[k][i].class == String
+           conf[k][i].gsub!(/%b/, $confdir) if conf[k][i].class == String
+        }
+      else
+        conf[k].gsub!(/%B/, $basedir) if conf[k].class == String
+        conf[k].gsub!(/%b/, $confdir) if conf[k].class == String
+      end
+    }
+
+    return conf
+  end
 end
 
 ################################################################################
@@ -211,6 +442,7 @@ class ConvertDoc
       @outfile = @outfile.gsub(/%r/, @doc.file.gsub(@doc.extname, ""))
       @outfile = @outfile.gsub(/%t/, @Type)
       @outfile = @outfile.gsub(/%p/, $options[@Type][:path])
+      @outfile = @outfile.gsub(/%B/, $basedir)
       @outfile = @outfile.gsub(/%b/, $confdir)
       @outdir = File.dirname(@outfile)
       FileUtils.mkpath @outdir if ! File.directory?(@outdir)
@@ -220,7 +452,7 @@ class ConvertDoc
     @ConfFile = "%R.yaml" if @ConfFile.nil?
     @conf = self.ReadConfig()
 
-    pp @conf if $debug
+    pp @conf if $debug3
   end
 
   ################################################################################
@@ -233,7 +465,12 @@ class ConvertDoc
 
     return true if not File.exists?(@outfile)
 
-    return true if File.mtime(@doc.filename) > File.mtime(@outfile)
+    if @doc.encrypted?
+      filename = @doc.filename_ori
+    else
+      filename = @doc.filename
+    end
+    return true if File.mtime(filename) > File.mtime(@outfile)
     return true if File.exists?($conf[:globalConfFile]) and File.mtime($conf[:globalConfFile]) > File.mtime(@outfile)
     return true if File.exists?(@ConfFile)              and File.mtime(@ConfFile)              > File.mtime(@outfile)
     srcfiles.each {|s|
@@ -336,6 +573,7 @@ class ConvertDoc
         t = t.gsub(/%t/, @Type)
         t = t.gsub(/%o/, @outfile)
         t = t.gsub(/%O/, @outdir)
+        t = t.gsub(/%B/, $basedir)
         t = t.gsub(/%b/, $confdir)
   
         cmd = "#{t}"
@@ -364,6 +602,7 @@ class ConvertDoc
   
     # dblatex options
     dblatexopts = ""
+    dblatexopts += "--output=#{@outfile} "
     conf["dblatex::options"].each {|o|
       dblatexopts += "#{o} "
     }
@@ -470,6 +709,7 @@ class ConvertDoc
     optfile = optfile.gsub(/%R/, @doc.dir + "/" + @doc.file.gsub(@doc.extname, ""))
     optfile = optfile.gsub(/%r/, @doc.file.gsub(@doc.extname, ""))
     optfile = optfile.gsub(/%t/, @Type)
+    optfile = optfile.gsub(/%B/, $basedir)
     optfile = optfile.gsub(/%b/, $confdir)
 
     conf["conffile"] = optfile
@@ -485,23 +725,27 @@ class ConvertDoc
         # surcharge d'options
         $sections.each {|s|
           next if c[s].nil?
-          if $sections_uniq.include?(s)
-            # remove then add option
-            c[s].each {|o|
-              o2 = o.gsub(/=.*/, "=")
-              conf[s].delete_if {|o3| o3.start_with?(o2)}
-              conf[s].push o
-            }
-          else
-            c[s].each {|o|
-              if o[0] == "!"
-                # delete option
-                conf[s].delete o[1..-1]
-              else
-                # just add option
+          if c[s].class == Array
+            if $sections_uniq.include?(s)
+              # remove then add option
+              c[s].each {|o|
+                o2 = o.gsub(/=.*/, "=")
+                conf[s].delete_if {|o3| o3.start_with?(o2)}
                 conf[s].push o
-              end
-            }
+              }
+            else
+              c[s].each {|o|
+                if o[0] == "!"
+                  # delete option
+                  conf[s].delete o[1..-1]
+                else
+                  # just add option
+                  conf[s].push o
+                end
+              }
+            end
+          else
+            conf[s] = c[s]
           end
         }
       rescue
@@ -514,10 +758,12 @@ class ConvertDoc
     conf.each {|k,v|
       if v.class == Array
         conf[k].each_index {|i|
-           conf[k][i].gsub!(/%b/, $confdir)
+           conf[k][i].gsub!(/%B/, $basedir) if conf[k][i].class == String
+           conf[k][i].gsub!(/%b/, $confdir) if conf[k][i].class == String
         }
       else
-        conf[k].gsub!(/%b/, $confdir)
+        conf[k].gsub!(/%B/, $basedir) if conf[k].class == String
+        conf[k].gsub!(/%b/, $confdir) if conf[k].class == String
       end
     }
 
@@ -582,10 +828,12 @@ def ReadGlobalConfig()
   conf.each {|k,v|
     if v.class == Array
       conf[k].each_index {|i|
-         conf[k][i].gsub!(/%b/, $confdir)
+         conf[k][i].gsub!(/%B/, $basedir) if conf[k][i].class == String
+         conf[k][i].gsub!(/%b/, $confdir) if conf[k][i].class == String
       }
     else
-      conf[k].gsub!(/%b/, $confdir)
+      conf[k].gsub!(/%B/, $basedir) if conf[k].class == String
+      conf[k].gsub!(/%b/, $confdir) if conf[k].class == String
     end
   }
 
@@ -624,6 +872,5 @@ task :gen, [:filelist] do |t, args|
         sleep 0.1
     end
 end
-
 
 
