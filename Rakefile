@@ -35,7 +35,8 @@ $options.keys.each {|t|
 # Sections dont parametres doivent etre uniques
 $sections_uniq = [ "dblatex::params" ]
 
-$globalConfFile = "asciidoc.yaml"
+$globalConfFile = "raskiidoc.yaml"
+$globalConfDir = "raskiidoc.d"
 
 
 ################################################################################
@@ -67,6 +68,11 @@ task :default do
     $debug3  = (ENV["DEBUG"].nil?)?false:(ENV["DEBUG"].to_i > 3)?true:false
     $force   = (ENV["FORCE"].nil?)?false:true
     $curdir  = ENV["PWD"]
+    if $curdir =~ / /
+      puts "Error : unable to process on directory with spaces : " + $curdir
+      exit(1)
+    end
+
 
     $conf = ReadGlobalConfig()
 
@@ -90,7 +96,7 @@ task :default do
       txtfilelist = Dir.glob("#{$curdir}/*.txt") || []
       adocfilelist = Dir.glob("#{$curdir}/*.asciidoc") || []
       (txtfilelist + adocfilelist).each {|file|
-        f = File.open(file, 'r')
+        f = File.open(file, 'r', :encoding => "UTF-8")
         l1 = f.gets
         l2 = f.gets
         f.close
@@ -113,6 +119,12 @@ task :default do
       end
       $force = true
     end
+    filelist.each {|f|
+      if f =~ / /
+        puts "Error : unable to process filename with space : " + f
+        exit(1)
+      end
+    }
 
     Rake::Task[:gen].invoke(Array.new(filelist))
 
@@ -202,7 +214,7 @@ class Doc
     end
 
     begin
-      @content = IO.readlines(@filename)
+      @content = IO.readlines(@filename, :encoding => "UTF-8")
     rescue => err
       puts "Exception: #{err}"
       return
@@ -381,10 +393,12 @@ class Doc
         conf[k].each_index {|i|
            conf[k][i].gsub!(/%B/, $basedir) if conf[k][i].class == String
            conf[k][i].gsub!(/%b/, $confdir) if conf[k][i].class == String
+           conf[k][i].gsub!(/%D/, @dir) if conf[k][i].class == String
         }
       else
         conf[k].gsub!(/%B/, $basedir) if conf[k].class == String
         conf[k].gsub!(/%b/, $confdir) if conf[k].class == String
+        conf[k].gsub!(/%D/, @dir) if conf[k].class == String
       end
     }
 
@@ -642,8 +656,6 @@ class ConvertDoc
       end
     }
     opts += "--dblatex-opts \"#{dblatexopts}\" " if dblatexopts != ""
-    # where to find images...
-    opts += "--dblatex-opts \"-I #{@doc.dir}\" "
   
     opts += "--dblatex-opts \"-d\" " if $debug2
   
@@ -765,10 +777,12 @@ class ConvertDoc
         conf[k].each_index {|i|
            conf[k][i].gsub!(/%B/, $basedir) if conf[k][i].class == String
            conf[k][i].gsub!(/%b/, $confdir) if conf[k][i].class == String
+           conf[k][i].gsub!(/%D/, @doc.dir) if conf[k][i].class == String
         }
       else
         conf[k].gsub!(/%B/, $basedir) if conf[k].class == String
         conf[k].gsub!(/%b/, $confdir) if conf[k].class == String
+        conf[k].gsub!(/%D/, @doc.dir) if conf[k].class == String
       end
     }
 
@@ -791,10 +805,20 @@ def ReadGlobalConfig()
     conf = {}
   end
 
+  Dir.glob("#{$confdir}/#{$globalConfDir}/*.yaml") {|f|
+    begin
+      conf.merge!(YAML.load_file(f))
+    rescue
+      puts "Unable to locate #{f}"
+      conf = {}
+    end
+  }
+
   $sections.each {|o|
     conf[o] = [] if conf[o].nil?
   }
   conf[:globalConfFile] = "#{$confdir}/#{$globalConfFile}"
+  conf[:globalConfDir] = "#{$confdir}/#{$globalConfDir}"
 
   altConfFile = "#{$curdir}/.rake/#{$globalConfFile}"
   if File.exists?(altConfFile)

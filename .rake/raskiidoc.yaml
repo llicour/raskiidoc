@@ -3,20 +3,6 @@
 # asciidoc -> html : asciidoc -> html
 
 
-vars::CoverPage::Logo1Filename: "%b/images/think_logo_new_big1.png"
-vars::CoverPage::Logo1Size: "0.35"
-vars::CoverPage::TitleLevel1: '\DBKtitle'
-vars::CoverPage::TitleLevel2: "Title level 2"
-vars::CoverPage::TitleLevel3: "Title level 3"
-vars::CoverPage::LabelBottomRight: "Company:"
-vars::CoverPage::LabelBottomLeft: "Author:"
-vars::CoverPage::TextBottomRight: "Think"
-vars::CoverPage::TextBottomCenter: '\today'
-vars::CoverPage::TextBottomLeft: '\DBKauthor'
-vars::Pages::FooterLeft: "left footer"
-vars::Pages::FooterCenter: '\thepage{} / \getpagerefnumber{LastPage}'
-vars::Pages::FooterRight: "right footer"
-
 #############################################
 # defaults options for asciidoc documents (html)
 #############################################
@@ -26,9 +12,9 @@ asciidoc::html::options:
   # Auto-number sections
   - "-n"
   # backend
-  - "--backend=lofic_backend"
+  - "--backend=%b/backends/fikibootstrap/fikibootstrap"
   # theme
-  - "--theme=pryz"
+  #- "--theme=pryz"
 
 #############################################
 # defaults config files for asciidoc documents (html)
@@ -76,7 +62,8 @@ asciidoc::slidy::attributes:
 # defaults options for asciidoc documents (slidy2)
 #############################################
 asciidoc::slidy2::options:
-  - "-b slidy2"
+  #- "-b slidy2"
+  - "--backend=%b/backends/slidy2/slidy2"
   # verbose mode
   #- "-v"
   # Auto-number sections
@@ -101,7 +88,8 @@ asciidoc::slidy2::attributes:
 # defaults options for asciidoc documents (deckjs)
 #############################################
 asciidoc::deckjs::options:
-  - "-b deckjs"
+  #- "-b deckjs"
+  - "--backend=%b/backends/asciidoc-deckjs/deckjs"
   # verbose mode
   #- "-v"
   # Auto-number sections
@@ -160,6 +148,8 @@ a2x::options:
 dblatex::options:
   # verbose mode
   #- "-V"
+  # where to find images
+  - "-I %D"
 
 #############################################
 # defaults parameters for dblatex backend
@@ -184,7 +174,7 @@ dblatex::xsl:
 #############################################
 dblatex::sty:
   # header/footer
-  - custom-frontpage-and-footer.sty
+  #- custom-frontpage-and-footer.sty
   # Some custom parameters
   - custom.sty
 
@@ -256,6 +246,18 @@ tools::slidy2::pre:
 # Postprocessing tools after slidy2 generation
 #############################################
 tools::slidy2::post:
+  # Remove footer
+  - sed -i '/^Last updated/d' %o
+
+#############################################
+# Preprocessing tools before deckjs generation
+#############################################
+tools::deckjs::pre:
+
+#############################################
+# Postprocessing tools after deckjs generation
+#############################################
+tools::deckjs::post:
   # Remove footer
   - sed -i '/^Last updated/d' %o
 

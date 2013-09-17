@@ -1,0 +1,44 @@
+= {title}
+:title:       Changelog
+:description: Summary of versions changes
+include::attributes.asciidoc[]
+:navinfo2:
+
+
+== Version 1.3.0 _(2013-01-21)_
+
+.Additions and changes:
+* Support three attributes `navinfo`, `navinfo1`, `navinfo2` to control which
+navigation information files will be included in the the header of the output file.
+See link:document-structure.html[Document Structure] chapter.
+* Support `footer` attribute to control which informations will be included in the output file.
+See link:document-structure.html[Document Structure] chapter.
+* The Brand link may be configure with the new `brandref` attribute.
+
+.Bug fixes:
+* none
+
+== Version 1.2.0 _(2013-01-16)_
+
+.Additions and changes:
+* admonitionblock used _alert-block_ twitter styles rather than inline _label_.
+See link:paragraphs.html[Paragraphs] chapter.
+* headers level 3 and 4 may be have an anchor now
+
+.Bug fixes:
+* none
+
+== Version 1.1.0 _(2012-12-17)_
+
+.Additions and changes:
+* use the standard _linkcss_ attribute to link CSS stylesheets and JavaScripts
+* add the standard footer of `lang-<lang>.conf` file, `footer-text` section
+* the TOC can be place on a sidebar on left or right of the main document body
+* support the AsciiDoc themes plugin
+
+.Bug fixes:
+* none
+
+== Version 1.0.0 _(2012-12-03)_
+
+See Dan Allen works https://github.com/mojavelinux/asciidoc-bootstrap-docs-backend

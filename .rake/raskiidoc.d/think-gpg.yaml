@@ -1,0 +1,13 @@
+---
+
+gpg::recipients:
+  # laurent.licour@think.fr
+  - 210EE507
+  # Marco Mornati (mmornati) ilmorna@gmail.com
+  - F9B99F8A
+  # louis.coilliot@think.fr
+  - 8EB8F3A2
+  # Julien Fabre (Pryz) ju.pryz@gmail.com
+  - 75D72E4B
+  # CI Think team@think.fr
+  - 20808C83
