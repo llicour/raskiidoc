@@ -98,6 +98,31 @@ asciidoc::slidy2::attributes:
   - iconsdir=%b/icons
 
 #############################################
+# defaults options for asciidoc documents (deckjs)
+#############################################
+asciidoc::deckjs::options:
+  - "-b deckjs"
+  # verbose mode
+  #- "-v"
+  # Auto-number sections
+  - "-n"
+
+#############################################
+# defaults config files for asciidoc documents (deckjs)
+#############################################
+asciidoc::deckjs::config:
+
+#############################################
+# defaults attributes for asciidoc documents (deckjs)
+#############################################
+asciidoc::deckjs::attributes:
+  # Embbed ressources (images, css...)
+  - data-uri
+  # icons
+  - icons
+  - iconsdir=%b/icons
+
+#############################################
 # defaults options for asciidoc documents (pdf)
 #############################################
 asciidoc::pdf::options:
