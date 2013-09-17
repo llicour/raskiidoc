@@ -160,6 +160,8 @@ dblatex::xsl:
 dblatex::sty:
   # header/footer
   - custom-frontpage-and-footer.sty
+  # Some custom parameters
+  - custom.sty
 
 
 
