@@ -15,6 +15,27 @@ Document specific configuration file
 The name of the document must be the same, with a .yaml extension
 <document>.yaml
 
+Install slidy2 asciidoc configuration files (no backend installation required)
+-----------------------------------------------------------------------------
+
+```bash
+sudo wget -O /etc/asciidoc/slidy2.conf https://asciidoc-slidy2-backend-plugin.googlecode.com/svn-history/r6/trunk/slidy2.conf
+sudo wget -O /etc/asciidoc/stylesheets/slidy2.css https://asciidoc-slidy2-backend-plugin.googlecode.com/svn/trunk/stylesheets/slidy2.css
+sudo wget -O /etc/asciidoc/stylesheets/slidy2_color_set_black.css https://asciidoc-slidy2-backend-plugin.googlecode.com/svn/trunk/stylesheets/slidy2_color_set_black.css
+sudo wget -O /etc/asciidoc/stylesheets/slidy2_color_set_blue.css https://asciidoc-slidy2-backend-plugin.googlecode.com/svn/trunk/stylesheets/slidy2_color_set_blue.css
+sudo wget -O /etc/asciidoc/stylesheets/slidy2_color_set_green.css https://asciidoc-slidy2-backend-plugin.googlecode.com/svn/trunk/stylesheets/slidy2_color_set_green.css
+sudo wget -O /etc/asciidoc/stylesheets/slidy2_color_set_none.css https://asciidoc-slidy2-backend-plugin.googlecode.com/svn/trunk/stylesheets/slidy2_color_set_none.css
+sudo wget -O /etc/asciidoc/stylesheets/slidy2_color_set_yellow.css https://asciidoc-slidy2-backend-plugin.googlecode.com/svn/trunk/stylesheets/slidy2_color_set_yellow.css
+sudo wget -O /etc/asciidoc/javascripts/slidy2.js https://asciidoc-slidy2-backend-plugin.googlecode.com/svn/trunk/javascripts/slidy2.js
+```
+
+Install deckjs asciidoc backend
+-----------------------------------------------------------------------------
+```bash
+wget -O deckjs.zip https://github.com/downloads/houqp/asciidoc-deckjs/deckjs-1.6.2.zip
+asciidoc --backend install deckjs.zip
+rm -f deckjs.zip
+```
 
 Usage
 -----

@@ -11,6 +11,7 @@ $options = { "pdf"    => {:path => "pdf",    :ext => "pdf",  :prog => "a2x"},
              "html"   => {:path => "html",   :ext => "html", :prog => "asciidoc" },
              "slidy2" => {:path => "slides", :ext => "html", :prog => "asciidoc" },
              "slidy"  => {:path => "slides", :ext => "html", :prog => "asciidoc" },
+             "deckjs"  => {:path => "slides", :ext => "html", :prog => "asciidoc" },
 }
 
 
@@ -46,7 +47,7 @@ task :help do
   puts "  DEBUG=3         : debug+ mode"
   puts "  DEBUG=4         : debug++ mode"
   puts "  FILE=<filename> : filename only"
-  puts "  target          : pdf, html, slidy, slidy2"
+  puts "  target          : pdf, html, slidy, slidy2, deckjs"
   puts
 end
 
@@ -117,6 +118,10 @@ task :slidy2 do
     $filter = :slidy2
     Rake::Task[:default].execute()
 end
+task :deckjs do
+    $filter = :deckjs
+    Rake::Task[:default].execute()
+end
 
 ################################################################################
 # Doc Class
@@ -168,7 +173,7 @@ class ConvertDoc
   def initialize(doc, convert)
     @doc = doc
 
-    m = /^:convert: (?<type>pdf|html|slidy|slidy2)(?<convopts>,.*)*$/.match(convert)
+    m = /^:convert: (?<type>pdf|html|slidy|slidy2|deckjs)(?<convopts>,.*)*$/.match(convert)
     if not m.nil?
       @Type = m[:type]
       convopts = m[:convopts]
