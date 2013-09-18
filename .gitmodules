@@ -1,0 +1,9 @@
+[submodule ".rake/backends/fikibootstrap"]
+	path = .rake/backends/fikibootstrap
+	url = https://github.com/mmornati/fikiboostrap.git
+[submodule ".rake/backends/asciidoc-deckjs"]
+	path = .rake/backends/asciidoc-deckjs
+	url = https://github.com/houqp/asciidoc-deckjs.git
+[submodule ".rake/backends/slidy2"]
+	path = .rake/backends/slidy2
+	url = https://github.com/mmornati/asciidoc-slidy2-backend-plugin.git
