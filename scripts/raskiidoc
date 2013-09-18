@@ -1,0 +1,67 @@
+#!/bin/bash
+RAKE_BIN=/usr/local/bin/rake
+
+source /etc/raskiidoc/raskiidoc.conf
+
+if [ ! -f $RAKE_BIN ]
+then
+    echo "You should install ruby rake gem file to use raskiidoc"
+    exit 1
+fi
+
+#if ( ! getopts "f:odh" opt); then
+#    echo "Usage: `basename $0` [options] [type]";
+#    echo "OPTIONS:";
+#    echo "-f filename : build only the specified file"
+#    echo "-o : force rebuild";
+#    echo "-d : debug mode"
+#    echo "-t type : type to build. One of [pdf|html|slidy|slidy2|deckjs]";
+#    echo "-h :  help";
+#    exit $E_OPTERROR;
+#fi
+while getopts "f:odt:h" opt; do
+     case $opt in
+         f) FILENAME=$OPTARG;;
+         o) FORCE=1;;
+         d) DEBUG=1;;
+         t) TYPE=$OPTARG;;
+         *) 
+            echo "Usage: `basename $0` [options]";
+            echo "OPTIONS:";
+            echo " -f filename : build only the specified file"
+            echo " -o : force rebuild";
+            echo " -d : debug mode"
+            echo " -t type : type to build. One of [pdf|html|slidy|slidy2|deckjs]";
+            echo " -h :  help";
+            exit $E_OPTERROR;
+         ;;
+     esac
+done
+
+TO_EXECUTE="";
+if [ -n "$FORCE" ];
+then
+    TO_EXECUTE="$TO_EXECUTE FORCE=$FORCE";
+fi
+if [ -n "$DEBUG" ];
+then
+    TO_EXECUTE="$TO_EXECUTE DEBUG=$DEBUG";
+fi
+if [ -n "$FILENAME" ];
+then
+    TO_EXECUTE="$TO_EXECUTE FILE=$FILENAME";
+fi
+TO_EXECUTE="$TO_EXECUTE $RAKE_BIN --rakefile $BASE_DIR/Rakefile";
+
+if [ -n "$TYPE" ];
+then
+    TO_EXECUTE="$TO_EXECUTE $TYPE";
+fi
+
+if [ -n "$DEBUG" ];
+then
+    echo "Executing command: ";
+    echo $TO_EXECUTE;
+    echo "";
+fi
+eval $TO_EXECUTE
