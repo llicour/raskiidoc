@@ -34,6 +34,22 @@ uptodate:
 git submodule foreach git pull origin master
 ```
 
+DeckJS Backend - Install Dependencies
+-------------------------------------
+If you want to use the deckJS backend, you need to install backend dependencies.
+Are not included into the github project, because is a project mantained by
+other developers.
+To do this, enter into backend folder and execute a make command:
+
+```bash
+cd .rake/backends/asciidoc-deckjs/
+make install-dep
+```
+
+You should see a little bit of output saying it is downloading deck.js project
+files.
+
+
 General configuration file
 --------------------------
 .rake/asciidoc.yaml
