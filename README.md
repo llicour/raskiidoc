@@ -15,6 +15,25 @@ with all submodules execute:
 git clone --recursive https://github.com/llicour/raskiidoc.git
 ```
 
+If you have already cloned the raskiidoc project, you can just clone all defined
+submodules. To accomplish this, into raskiidoc project folder, execte:
+
+```bash
+git submodule init 
+git submodule update
+```
+
+And all submodules will be downloaded.
+
+Update submodules sources
+-------------------------
+If a submodules have changes, you can invoke a git pull to get anything
+uptodate:
+
+```bash
+git submodule foreach git pull origin master
+```
+
 General configuration file
 --------------------------
 .rake/asciidoc.yaml
