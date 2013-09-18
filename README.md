@@ -6,6 +6,50 @@ Asciidoc generation can use complex arguments hard to remember, and could be doc
 
 This rakefile (and parameters files) is an attempt to identify options to use during generation.
 
+Clone Project with all submodules
+---------------------------------
+Raskiidoc allow you to use different asciidoc backends. To clone the project
+with all submodules execute:
+
+```bash
+git clone --recursive https://github.com/llicour/raskiidoc.git
+```
+
+If you have already cloned the raskiidoc project, you can just clone all defined
+submodules. To accomplish this, into raskiidoc project folder, execte:
+
+```bash
+git submodule init 
+git submodule update
+```
+
+And all submodules will be downloaded.
+
+Update submodules sources
+-------------------------
+If a submodules have changes, you can invoke a git pull to get anything
+uptodate:
+
+```bash
+git submodule foreach git pull origin master
+```
+
+DeckJS Backend - Install Dependencies
+-------------------------------------
+If you want to use the deckJS backend, you need to install backend dependencies.
+Are not included into the github project, because is a project mantained by
+other developers.
+To do this, enter into backend folder and execute a make command:
+
+```bash
+cd .rake/backends/asciidoc-deckjs/
+make install-dep
+```
+
+You should see a little bit of output saying it is downloading deck.js project
+files.
+
+
 General configuration file
 --------------------------
 .rake/asciidoc.yaml

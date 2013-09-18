@@ -1,0 +1,30 @@
+= Sample with inclusion Doc
+//////
+:copyright: 2013, ACME corporation
+:revinfo:
+v1.0, ACME, 2013-09-18: Initial version
+:legalnotice:
+.GPL
+:convert: pdf
+:convert: html
+:convert: slidy2
+:convert: deckjs,outfile=%r-deckjs.html
+#:noconvert:
+//////
+
+////////////////////////
+// Argument 1
+////////////////////////
+
+:leveloffset: 1
+include::argument_one.asciidoc[]
+:leveloffset: 0
+
+////////////////////////
+// Argument 2
+////////////////////////
+
+:leveloffset: 1
+include::argument_two.asciidoc[]
+
+

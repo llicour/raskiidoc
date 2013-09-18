@@ -1,4 +1,5 @@
+.rake/a2x.conf
 html/
 pdf/
-slides/
 *-docinfo.xml
+changelog.txt
