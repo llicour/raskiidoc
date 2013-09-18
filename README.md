@@ -6,6 +6,15 @@ Asciidoc generation can use complex arguments hard to remember, and could be doc
 
 This rakefile (and parameters files) is an attempt to identify options to use during generation.
 
+Clone Project with all submodules
+---------------------------------
+Raskiidoc allow you to use different asciidoc backends. To clone the project
+with all submodules execute:
+
+```bash
+git clone --recursive https://github.com/llicour/raskiidoc.git
+```
+
 General configuration file
 --------------------------
 .rake/asciidoc.yaml
